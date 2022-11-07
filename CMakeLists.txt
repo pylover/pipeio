@@ -18,7 +18,7 @@ include_directories(
 
 
 # Static Library
-add_library(pipeio STATIC pipeio.c)
+add_library(pipeio STATIC ev.c pipeio.c)
 
 
 # Install
