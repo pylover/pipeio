@@ -1,3 +1,5 @@
+#include "mockup.h"
+
 #include <clog.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,7 +17,7 @@
 
 
 int
-start_unixserver(const char *filename, char *outbuff, char *inbuff, 
+unixsrv_start(const char *filename, char *outbuff, char *inbuff, 
         size_t size) {
     int listenfd;
     int connfd;
@@ -146,48 +148,41 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
 }
 
 
-int
-fork_unixserver(const char *filename, char *outbuff, char *inbuff, 
-        size_t size) {
-    int pipefd[2];
-    int status;
-
-    if (pipe(pipefd) == -1) {
+struct unixsrv *
+unixsrv_fork(const char *filename, char *outbuff, char *inbuff, size_t size) {
+    struct unixsrv *s = malloc(sizeof(struct unixsrv));
+    if (pipe(s->pipe) == -1) {
         FATAL("pipe");
     }
 
     pid_t childpid = fork();
     if (childpid == 0) {
         /* Child process */
-        close(pipefd[0]);
-        if (start_unixserver(filename, outbuff, inbuff, size)) {
+        close(s->pipe[0]);
+        if (unixsrv_start(filename, outbuff, inbuff, size)) {
             ERROR("Cannot start unixserver");
             exit(1);
         }
 
-        write(pipefd[1], inbuff, size);
-        close(pipefd[1]);
+        write(s->pipe[1], inbuff, size);
+        close(s->pipe[1]);
         exit(0);
-        return 0;
+        return NULL;
     }
 
-    wait(&status);
     /* Parent process */
-    close(pipefd[1]);
-    read(pipefd[0], inbuff, size);
-    close(pipefd[0]);
-    return status;
+    s->pid = childpid;
+    return s;
 }
 
 
-int main() {
-    char *outbuff = "Hello\n";
-    char inbuff[6];
-
-    if (fork_unixserver("/tmp/pipeio-foo.s", outbuff, inbuff, 6)) {
-        FATAL("fork_unixserver");
-    }
-    INFO("Reply: %.*s", 6, inbuff);
-
-    return EXIT_SUCCESS;
+int
+unixsrv_wait(struct unixsrv *s, char *inbuff, size_t size) {
+    int status;
+    wait(&status);
+    close(s->pipe[1]);
+    read(s->pipe[0], inbuff, size);
+    close(s->pipe[0]);
+    free(s);
+    return status;
 }
