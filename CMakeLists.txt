@@ -40,6 +40,11 @@ include(CTest)
 list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 
+# Mockup
+add_executable(mockup mockup.c)
+target_link_libraries(mockup PUBLIC mrb clog)
+
+
 # Test Magic ringbuffer
 add_executable(pipeio_test pipeio_test.c)
 target_link_libraries(pipeio_test PUBLIC pipeio mrb clog)

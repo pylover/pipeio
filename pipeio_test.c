@@ -18,6 +18,9 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
     struct sockaddr_un addr, peer_addr;
     socklen_t peer_addr_size;
 
+    /* unlink previous link to file */
+    unlink(filename);
+
     listenfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (listenfd == -1) {
         FATAL("socket");
@@ -130,6 +133,7 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
         }
     }
 
+    INFO("Client reply: %.*s", size, outbuff);
     close(connfd);
     close(listenfd);
     close(epollfd);
@@ -164,6 +168,9 @@ test_pipeio_create() {
 
 
 int main() {
-    start_unixserver("/tmp/pipeio-foo.s", NULL, NULL, 0);
+    char *inbuff = "Hello";
+    char outbuff[5];
+
+    start_unixserver("/tmp/pipeio-foo.s", inbuff, outbuff, 5);
     return EXIT_SUCCESS;
 }
