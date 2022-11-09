@@ -3,10 +3,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
-#include <errno.h>
+#include <sys/wait.h>
 #include <sys/un.h>
 
 
@@ -53,8 +54,6 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
         FATAL("accept");
     }
     
-    INFO("New connection");
-
     /* Event Loop */
     int epollfd = epoll_create1(0);
     struct epoll_event ev;
@@ -91,7 +90,7 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
                 errno = 0;
                 tmp = recv(fd, inbuff + rlen, size - rlen, 0);
                 if (tmp == 0) {
-                    return 0;
+                    FATAL("recv EOF");
                 }
                 if ((tmp < 0) && (!EV_SHOULDWAIT())) {
                     FATAL("recv");
@@ -103,7 +102,7 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
                 errno = 0;
                 tmp = send(fd, outbuff + wlen, size - wlen, 0);
                 if (tmp == 0) {
-                    return 0;
+                    FATAL("send EOF");
                 }
 
                 if ((tmp < 0) && (!EV_SHOULDWAIT())) {
@@ -126,7 +125,6 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
         ev.data.fd = connfd;
         ev.events = EPOLLET | EPOLLRDHUP | EPOLLERR;
         if ((wlen >= size) && (rlen >= size)) {
-            DEBUG("Breaking");
             break;
         }
         if (wlen < size) {
@@ -140,7 +138,6 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
         }
     }
 
-    INFO("Client reply: %.*s", size, inbuff);
     close(connfd);
     close(listenfd);
     close(epollfd);
@@ -150,21 +147,36 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
 
 
 int
-fork_unixserver(const char *filename, char *inbuff, char *outbuff, 
+fork_unixserver(const char *filename, char *outbuff, char *inbuff, 
         size_t size) {
+    int pipefd[2];
+    int status;
+
+    if (pipe(pipefd) == -1) {
+        FATAL("pipe");
+    }
+
     pid_t childpid = fork();
     if (childpid == 0) {
         /* Child process */
-        if (start_unixserver(filename, inbuff, outbuff, size)) {
+        close(pipefd[0]);
+        if (start_unixserver(filename, outbuff, inbuff, size)) {
             ERROR("Cannot start unixserver");
             exit(1);
         }
+
+        write(pipefd[1], inbuff, size);
+        close(pipefd[1]);
         exit(0);
         return 0;
     }
 
+    wait(&status);
     /* Parent process */
-    return childpid;
+    close(pipefd[1]);
+    read(pipefd[0], inbuff, size);
+    close(pipefd[0]);
+    return status;
 }
 
 
@@ -172,6 +184,10 @@ int main() {
     char *outbuff = "Hello\n";
     char inbuff[6];
 
-    start_unixserver("/tmp/pipeio-foo.s", outbuff, inbuff, 6);
+    if (fork_unixserver("/tmp/pipeio-foo.s", outbuff, inbuff, 6)) {
+        FATAL("fork_unixserver");
+    }
+    INFO("Reply: %.*s", 6, inbuff);
+
     return EXIT_SUCCESS;
 }
