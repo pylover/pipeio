@@ -11,6 +11,10 @@ struct unixsrv {
 };
 
 
+int
+unix_connect(const char *filename);
+
+
 struct unixsrv *
 unixsrv_fork(const char *filename, char *outbuff, char *inbuff, size_t size);
 

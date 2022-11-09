@@ -32,7 +32,7 @@ struct pipeio {
 
 
 struct pipeio *
-pipeio_create(int lfd, int rfd, size_t mtu, size_t buffsize, void *backref) {
+pipeio_create(int infd, int outfd, size_t mtu, size_t buffsize, void *backref) {
     struct pipeio *p = malloc(sizeof(struct pipeio));
     if (p == NULL) {
         return NULL;
@@ -51,6 +51,10 @@ pipeio_create(int lfd, int rfd, size_t mtu, size_t buffsize, void *backref) {
 
     p->closing = false;
     p->backref = backref;
+
+    /* tasks */
+    p->inside.fd = infd;
+    p->outside.fd = outfd;
 
     /* Callbacks */
     p->leftwriter = pipeio_writer;

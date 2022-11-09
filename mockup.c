@@ -17,6 +17,28 @@
 
 
 int
+unix_connect(const char *filename) {
+    int fd;
+    struct sockaddr_un addr;
+
+    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+        ERROR("socket");
+        return -1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, filename);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        ERROR("connect");
+        return -1;
+    }
+    
+    return fd;
+}
+
+
+int
 unixsrv_start(const char *filename, char *outbuff, char *inbuff, 
         size_t size) {
     int listenfd;
