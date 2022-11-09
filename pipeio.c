@@ -11,15 +11,15 @@ struct pipeio {
     bool closing;
 
     /* Workers */
-    struct pipeio_iotask left;
-    struct pipeio_iotask right;
+    struct pipeio_task inside;
+    struct pipeio_task outside;
 
     /* Callbacks */
     pipeio_worker leftwriter;
     pipeio_worker leftreader;
     pipeio_worker rightwriter;
     pipeio_worker rightreader;
-    pipeio_worker close;
+    pipeio_errhandler errhandler;
 
     /* Buffers */
     struct mrb input;
@@ -53,11 +53,11 @@ pipeio_create(int lfd, int rfd, size_t mtu, size_t buffsize, void *backref) {
     p->backref = backref;
 
     /* Callbacks */
-    p->leftwriter = pipeio_leftwriter;
-    p->leftreader = pipeio_leftreader;
-    p->rightwriter = pipeio_rightwriter;
-    p->rightreader = pipeio_rightreader;
-    p->close = NULL;
+    p->leftwriter = pipeio_writer;
+    p->leftreader = pipeio_reader;
+    p->rightwriter = pipeio_writer;
+    p->rightreader = pipeio_reader;
+    p->errhandler = NULL;
     
     return p;
 }
@@ -77,4 +77,34 @@ pipeio_destroy(struct pipeio *p) {
 void
 pipeio_leftwriter_set(struct pipeio *p, pipeio_worker writer) {
     p->leftwriter = writer;
+}
+
+
+void
+pipeio_leftreader_set(struct pipeio *p, pipeio_worker reader) {
+    p->leftreader = reader;
+}
+
+
+void
+pipeio_rightwriter_set(struct pipeio *p, pipeio_worker writer) {
+    p->rightwriter = writer;
+}
+
+
+void
+pipeio_rightreader_set(struct pipeio *p, pipeio_worker reader) {
+    p->rightreader = reader;
+}
+
+
+enum pipeio_status
+pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
+    return IOR_OK;
+}
+
+
+enum pipeio_status
+pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
+    return IOR_OK;
 }

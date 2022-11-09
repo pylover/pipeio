@@ -54,7 +54,7 @@ pipeio_deinit() {
 
 
 int
-pipeio_arm(struct pipeio_iotask *task) {
+pipeio_arm(struct pipeio_task *task) {
     int fd = task->fd;
     struct epoll_event ev;
 
@@ -99,7 +99,7 @@ void
 pipeio_loop(volatile int *status, int holdfd) {
     int i;
     int fd;
-    struct pipeio_iotask *task;
+    struct pipeio_task *task;
     int count;
     
     while (_tasks && ((status == NULL) || (*status > EXIT_FAILURE))) {
@@ -116,7 +116,7 @@ pipeio_loop(volatile int *status, int holdfd) {
         }
 
         for (i = 0; i < count; i++) {
-            task = (struct pipeio_iotask *) _events[i].data.ptr;
+            task = (struct pipeio_task *) _events[i].data.ptr;
             fd = task->fd;
 
             if ((fd != holdfd) && (_files[fd] != -1)) {

@@ -2,6 +2,7 @@
 #define PIPEIO_H
 
 
+#include <mrb.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/epoll.h>
@@ -11,7 +12,7 @@
 #define EV_SHOULDWAIT() ((errno == EAGAIN) || (errno == EWOULDBLOCK))
 
 
-enum pipeio_ioop {
+enum pipeio_op {
     WIO_READ = EPOLLIN,
     WIO_WRITE = EPOLLOUT,
     WIO_RDHUP = EPOLLRDHUP,
@@ -24,9 +25,9 @@ typedef void (*pipeio_task)(void *arg, int events);
 
 /* A simple bag which used by waitA to hold io's essential data 
    until the underlying file descriptor becomes ready for read or write. */
-struct pipeio_iotask {
+struct pipeio_task {
     int fd;
-    enum pipeio_ioop op;
+    enum pipeio_op op;
     void *arg;
     pipeio_task callback;
 };
@@ -41,7 +42,7 @@ pipeio_deinit();
 
 
 int 
-pipeio_arm(struct pipeio_iotask *task);
+pipeio_arm(struct pipeio_task *task);
 
 
 int 
@@ -65,7 +66,11 @@ enum pipeio_status {
 };
 
 
-typedef enum pipeio_status (*pipeio_worker) (struct pipeio *);
+typedef enum pipeio_status (*pipeio_worker) 
+    (struct pipeio *, int fd, struct mrb *buff);
+
+
+typedef void (*pipeio_errhandler) (struct pipeio *);
 
 
 struct pipeio *
@@ -78,5 +83,26 @@ pipeio_destroy(struct pipeio *tw);
 
 void
 pipeio_leftwriter_set(struct pipeio *p, pipeio_worker writer);
+
+
+void
+pipeio_leftreader_set(struct pipeio *p, pipeio_worker reader);
+
+
+void
+pipeio_rightwriter_set(struct pipeio *p, pipeio_worker writer);
+
+
+void
+pipeio_rightreader_set(struct pipeio *p, pipeio_worker reader);
+
+
+enum pipeio_status
+pipeio_reader(struct pipeio *p, int fd, struct mrb *buff);
+
+
+enum pipeio_status
+pipeio_writer(struct pipeio *p, int fd, struct mrb *buff);
+
 
 #endif
