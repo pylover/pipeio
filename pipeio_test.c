@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -45,7 +46,8 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
     if (connfd == -1) {
         FATAL("accept");
     }
-
+    
+    INFO("New connection");
 
     /* Event Loop */
     int epollfd = epoll_create1(0);
@@ -54,9 +56,11 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
     int evcount;
     int i;
     int fd;
+    size_t wlen = 0;
+    size_t rlen = 0;
+    ssize_t tmp;
 
-    ev.events = EPOLLONESHOT | EPOLLET | EPOLLRDHUP | EPOLLERR | 
-        EPOLLIN | EPOLLOUT;
+    ev.events = EPOLLET | EPOLLRDHUP | EPOLLERR | EPOLLIN | EPOLLOUT;
     ev.data.fd = connfd;
 
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) != 0) {
@@ -78,16 +82,51 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
 
             if (events[i].events & EPOLLIN) {
                 /* read */
+                errno = 0;
+                tmp = recv(fd, inbuff + rlen, size, 0);
+                if (tmp == 0) {
+                    return 0;
+                }
+                if ((tmp < 0) && (!EV_SHOULDWAIT())) {
+                    FATAL("recv");
+                }
+                rlen += tmp;
+                if (rlen == size) {
+                    ev.events -= EPOLLIN;
+                }
             }
             else if (events[i].events & EPOLLOUT) {
                 /* write */
+                errno = 0;
+                tmp = send(fd, outbuff + wlen, size - wlen, 0);
+                if (tmp == 0) {
+                    return 0;
+                }
+
+                if ((tmp < 0) && (!EV_SHOULDWAIT())) {
+                    FATAL("send");
+                }
+                wlen += tmp;
+                if (wlen == size) {
+                    ev.events -= EPOLLOUT;
+                }
             }
             else if (events[i].events & EPOLLRDHUP) {
                 /* hangup */
+                close(fd);
+                FATAL("Remote hanged up");
             }
             else if (events[i].events & EPOLLERR) {
                 /* error */
+                close(fd);
+                FATAL("Connection error");
             }
+        }
+        if ((events[i].events & EPOLLIN) || (events[i].events & EPOLLOUT)) {
+            break;
+        }
+        if (epoll_ctl(epollfd, EPOLL_CTL_MOD, connfd, &ev) != 0) {
+            FATAL("epoll_ctl");
         }
     }
 
@@ -95,6 +134,7 @@ start_unixserver(const char *filename, char *outbuff, char *inbuff,
     close(listenfd);
     close(epollfd);
     unlink(filename);
+    return 0;
 }
 
 
