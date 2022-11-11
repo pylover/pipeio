@@ -23,4 +23,8 @@ int
 unixsrv_wait(struct unixsrv *s, char *inbuff, size_t size);
 
 
+int
+unixsrv_kill(struct unixsrv *s);
+
+
 #endif

@@ -31,6 +31,15 @@ test_pipeio_create() {
         goto failure;
     }
 
+    if (read(randfd, inside_outbuff, BUFFSIZE) <= 0) {
+        ERROR("read random");
+        goto failure;
+    }
+    if (read(randfd, outside_outbuff, BUFFSIZE) <= 0) {
+        ERROR("read random");
+        goto failure;
+    }
+    
     inside = unixsrv_fork("/tmp/pipeio-inside.s", inside_outbuff, 
             inside_inbuff, BUFFSIZE);
     if (inside == NULL) {
@@ -45,15 +54,7 @@ test_pipeio_create() {
         goto failure;
     }
 
-    if (read(randfd, inside_outbuff, BUFFSIZE) <= 0) {
-        ERROR("read random");
-        goto failure;
-    }
-    if (read(randfd, outside_outbuff, BUFFSIZE) <= 0) {
-        ERROR("read random");
-        goto failure;
-    }
-
+    sleep(1);
     int infd = unix_connect("/tmp/pipeio-inside.s");
     if (infd < 0) {
         ERROR("unix_connect");
@@ -72,22 +73,29 @@ test_pipeio_create() {
         goto failure;
     }
 
+    pipeio_loop(NULL, 0);
+
+    sleep(1);
+    unixsrv_kill(inside);
+    unixsrv_kill(outside);
     unixsrv_wait(inside, inside_inbuff, BUFFSIZE);
     unixsrv_wait(outside, outside_inbuff, BUFFSIZE);
 
     /* compare */
-    eqnstr(inside_outbuff, outside_inbuff, BUFFSIZE);
-    eqnstr(outside_outbuff, inside_inbuff, BUFFSIZE);
+    eqbin(inside_outbuff, outside_inbuff, BUFFSIZE);
+    eqbin(outside_outbuff, inside_inbuff, BUFFSIZE);
 
     goto destroy;
 
 failure:
     unixsrv_kill(inside);
     unixsrv_kill(outside);
+    unixsrv_wait(inside, inside_inbuff, BUFFSIZE);
+    unixsrv_wait(outside, outside_inbuff, BUFFSIZE);
 
 destroy:
     /* free */
-    pipeio_destory(pipe);
+    pipeio_destroy(pipe);
     free(inside_inbuff);
     free(inside_outbuff);
     free(outside_inbuff);

@@ -201,10 +201,21 @@ unixsrv_fork(const char *filename, char *outbuff, char *inbuff, size_t size) {
 int
 unixsrv_wait(struct unixsrv *s, char *inbuff, size_t size) {
     int status;
-    wait(&status);
+    if (waitpid(s->pid, &status, 0) == -1) {
+        return -1;
+    }
     close(s->pipe[1]);
-    read(s->pipe[0], inbuff, size);
+    if (inbuff != NULL) {
+        read(s->pipe[0], inbuff, size);
+    }
     close(s->pipe[0]);
     free(s);
     return status;
+}
+
+
+int
+unixsrv_kill(struct unixsrv *s) {
+    kill(s->pid, SIGINT);
+    return unixsrv_wait(s, NULL, 0);
 }

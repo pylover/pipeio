@@ -78,7 +78,7 @@ pipeio_create(int lfd, int rfd, size_t mtu, size_t buffsize, void *backref);
 
 
 void
-pipeio_destroy(struct pipeio *tw);
+pipeio_destroy(struct pipeio *p);
 
 
 void
