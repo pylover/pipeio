@@ -73,6 +73,7 @@ test_pipeio_create() {
         goto failure;
     }
 
+    pipeio_start(pipe);
     pipeio_loop(NULL, 0);
 
     sleep(1);
@@ -100,6 +101,7 @@ destroy:
     free(inside_outbuff);
     free(outside_inbuff);
     free(outside_outbuff);
+    close(randfd);
 }
 
 

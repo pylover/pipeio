@@ -124,7 +124,7 @@ pipeio_loop(volatile int *status, int holdfd) {
                 _files[fd] = -1;
             }
 
-            task->callback(task->arg, _events[i].events);
+            task->callback(fd, _events[i].events, task->arg);
         }
     }
 }

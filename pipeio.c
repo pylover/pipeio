@@ -1,25 +1,31 @@
 #include "pipeio.h"
 
+#include <clog.h>
 #include <mrb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 
+struct pipeio_side {
+    struct pipeio_task task;
+
+    pipeio_worker writer;
+    pipeio_worker reader;
+
+    struct pipeio *backref;
+};
+
+
 struct pipeio {
     /* Status */
     bool closing;
 
-    /* Workers */
-    struct pipeio_task inside;
-    struct pipeio_task outside;
+    /* sides */
+    struct pipeio_side inside;
+    struct pipeio_side outside;
 
-    /* Callbacks */
-    pipeio_worker leftwriter;
-    pipeio_worker leftreader;
-    pipeio_worker rightwriter;
-    pipeio_worker rightreader;
-    pipeio_errhandler errhandler;
+    pipeio_callback errhandler;
 
     /* Buffers */
     struct mrb input;
@@ -29,6 +35,30 @@ struct pipeio {
     size_t mtu;
     void *backref;
 };
+
+
+static int
+_readwrite(int fd, int op, struct pipeio_side *s) {
+    struct pipeio *p = s->backref;
+
+    if (op & PIO_RDHUP) {
+        INFO("Remote hanged up");
+        p->errhandler(fd, op, p);
+    }
+
+    if (op & PIO_ERR) {
+        INFO("Connection error");
+        p->errhandler(fd, op, p);
+    }
+
+    if (op & PIO_READ) {
+
+    }
+
+    if (op & PIO_WRITE) {
+
+    }
+}
 
 
 struct pipeio *
@@ -53,14 +83,21 @@ pipeio_create(int infd, int outfd, size_t mtu, size_t buffsize, void *backref) {
     p->backref = backref;
 
     /* tasks */
-    p->inside.fd = infd;
-    p->outside.fd = outfd;
+    p->inside.task.fd = infd;
+    p->inside.task.op = PIO_READ;
+    p->inside.task.callback = (pipeio_callback)_readwrite;
+    p->inside.task.arg = p;
+
+    p->outside.task.fd = outfd;
+    p->outside.task.op = PIO_READ;
+    p->outside.task.callback = (pipeio_callback)_readwrite;
+    p->outside.task.arg = p;
 
     /* Callbacks */
-    p->leftwriter = pipeio_writer;
-    p->leftreader = pipeio_reader;
-    p->rightwriter = pipeio_writer;
-    p->rightreader = pipeio_reader;
+    p->inside.writer = pipeio_writer;
+    p->inside.reader = pipeio_reader;
+    p->outside.writer = pipeio_writer;
+    p->outside.reader = pipeio_reader;
     p->errhandler = NULL;
     
     return p;
@@ -79,36 +116,43 @@ pipeio_destroy(struct pipeio *p) {
 
 
 void
-pipeio_leftwriter_set(struct pipeio *p, pipeio_worker writer) {
-    p->leftwriter = writer;
+pipeio_start(struct pipeio *p) {
+    _readwrite(p->inside.task.fd, p->inside.task.op, &(p->inside));
+    _readwrite(p->outside.task.fd, p->outside.task.op, &(p->outside));
 }
 
 
 void
-pipeio_leftreader_set(struct pipeio *p, pipeio_worker reader) {
-    p->leftreader = reader;
+pipeio_inside_writer_set(struct pipeio *p, pipeio_worker writer) {
+    p->inside.writer = writer;
 }
 
 
 void
-pipeio_rightwriter_set(struct pipeio *p, pipeio_worker writer) {
-    p->rightwriter = writer;
+pipeio_inside_reader_set(struct pipeio *p, pipeio_worker reader) {
+    p->inside.reader = reader;
 }
 
 
 void
-pipeio_rightreader_set(struct pipeio *p, pipeio_worker reader) {
-    p->rightreader = reader;
+pipeio_outside_writer_set(struct pipeio *p, pipeio_worker writer) {
+    p->outside.writer = writer;
+}
+
+
+void
+pipeio_outside_reader_set(struct pipeio *p, pipeio_worker reader) {
+    p->outside.reader = reader;
 }
 
 
 enum pipeio_status
 pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
-    return IOR_OK;
+    return PIO_ERROR;
 }
 
 
 enum pipeio_status
 pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
-    return IOR_OK;
+    return PIO_ERROR;
 }
