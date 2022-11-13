@@ -16,7 +16,7 @@ struct pipeio;
 
 
 enum pipeio_status {
-    PIO_OK = 0,
+    PIO_UNKNOWN = 0,
     PIO_AGAIN = -1,
     PIO_ERROR = -2,
     PIO_BUFFERFULL = -3,
@@ -34,6 +34,7 @@ enum pipeio_op {
 
 
 typedef void (*pipeio_callback)(int fd, int events, void *arg);
+typedef void (*pipeio_onerror)(struct pipeio *p);
 
 
 typedef enum pipeio_status (*pipeio_worker) 

@@ -28,7 +28,7 @@ struct pipeio {
     struct pipeio_side inside;
     struct pipeio_side outside;
 
-    pipeio_callback errhandler;
+    pipeio_onerror errhandler;
 
     /* Buffers */
     struct mrb *input;
@@ -40,6 +40,76 @@ struct pipeio {
 };
 
 
+static int
+_read(struct pipeio_side *s) {
+    int fd = s->task.fd;
+    struct pipeio *p = s->pipe;
+    enum pipeio_status status = s->reader(p, fd, s->readbuff);
+    switch (status) {
+        case PIO_BUFFERFULL:
+            if (register_for_write(pipeio_otherside(s)) < 0) {
+                ERROR("register_for_write(otherside)");
+                return -1;
+            }
+            break;
+        case PIO_AGAIN:
+            if (register_for_read(s) < 0) {
+                ERROR("register_for_read");
+                return -1;
+            }
+            break;
+
+        case PIO_EOF:
+            INFO("Remote hanged up");
+            return -1;
+
+        case PIO_ERROR:
+            ERROR("Connection error");
+            return -1;
+
+        default:
+            ERROR("Unknown situation, status: %d", status);
+            return -1;
+    }
+    return 0;
+}
+
+
+static int
+_write(struct pipeio_side *s) {
+    int fd = s->task.fd;
+    struct pipeio *p = s->pipe;
+    enum pipeio_status status = s->writer(p, fd, s->writebuff);
+    switch (status) {
+        case PIO_MOREDATA:
+            struct pipeio_side *otherside = pipeio_otherside(s);
+            if (_read(otherside)) {
+                return -1;
+            }
+            break;
+        case PIO_AGAIN:
+            if (register_for_write(s) < 0) {
+                ERROR("register_for_write");
+                return -1;
+            }
+            break;
+
+        case PIO_EOF:
+            INFO("Remote hanged up");
+            return -1;
+
+        case PIO_ERROR:
+            ERROR("Connection error");
+            return -1;
+
+        default:
+            ERROR("Unknown situation, status: %d", status);
+            return -1;
+    }
+    return 0;
+}
+
+
 static void
 _readwrite(int fd, int op, struct pipeio_side *s) {
     struct pipeio *p = s->pipe;
@@ -47,87 +117,27 @@ _readwrite(int fd, int op, struct pipeio_side *s) {
 
     if (op & PIO_RDHUP) {
         INFO("Remote hanged up");
-        p->errhandler(fd, op, p);
+        p->errhandler(p);
         return;
 
     }
 
     if (op & PIO_ERR) {
-        ERROR("Connection error");
-        p->errhandler(fd, op, p);
+        ERROR("Connection");
+        p->errhandler(p);
         return;
     }
 
-    if (op & PIO_READ) {
-        status = s->reader(p, fd, s->readbuff);
-        switch (status) {
-            case PIO_OK:
-            case PIO_BUFFERFULL:
-                if (register_for_write(pipeio_otherside(s)) < 0) {
-                    ERROR("register_for_write(otherside)");
-                    p->errhandler(fd, op, p);
-                    return;
-                }
-                break;
-            case PIO_AGAIN:
-                if (register_for_read(s) < 0) {
-                    ERROR("register_for_read");
-                    p->errhandler(fd, op, p);
-                    return;
-                }
-                break;
-
-            case PIO_EOF:
-                INFO("Remote hanged up");
-                p->errhandler(fd, op, p);
-                return;;
-
-            case PIO_ERROR:
-                ERROR("Connection error");
-                p->errhandler(fd, op, p);
-                return;
-
-            default:
-                ERROR("Unknown situation, status: %d", status);
-                p->errhandler(fd, op, p);
-                return;
-        }
+    if ((op & PIO_READ) && _read(s)) {
+        ERROR("_read");
+        p->errhandler(p);
+        return;
     }
 
-    if (op & PIO_WRITE) {
-        status = s->writer(p, fd, s->writebuff);
-        switch (status) {
-            case PIO_OK:
-            case PIO_MOREDATA:
-                if (register_for_read(pipeio_otherside(s)) < 0) {
-                    ERROR("register_for_read(otherside)");
-                    p->errhandler(fd, op, p);
-                    return;
-                }
-                break;
-            case PIO_AGAIN:
-                if (register_for_write(s) < 0) {
-                    ERROR("register_for_write");
-                    p->errhandler(fd, op, p);
-                    return;
-                }
-                break;
-
-            case PIO_EOF:
-                INFO("Remote hanged up");
-                p->errhandler(fd, op, p);
-                return;;
-
-            case PIO_ERROR:
-                ERROR("Connection error");
-                p->errhandler(fd, op, p);
-                return;
-
-            default:
-                ERROR("Unknown situation, status: %d", status);
-                p->errhandler(fd, op, p);
-                return;
-        }
+    if ((op & PIO_WRITE) && _write(s)) {
+        ERROR("_write");
+        p->errhandler(p);
+        return;
     }
 }
 
@@ -234,13 +244,49 @@ pipeio_outside_reader_set(struct pipeio *p, pipeio_worker reader) {
 
 enum pipeio_status
 pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
-    return PIO_ERROR;
+    size_t toread = mrb_space_available(buff); 
+    ssize_t result;
+
+    while (toread) {
+        result = mrb_readin(buff, fd, toread);
+        if (result < 0) {
+            if (EV_SHOULDWAIT()) {
+                return PIO_AGAIN;
+            }
+            return PIO_ERROR;
+        }
+
+        if (result == 0) {
+            return PIO_EOF;
+        }
+
+        toread -= result;
+    }
+    return PIO_BUFFERFULL;
 }
 
 
 enum pipeio_status
 pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
-    return PIO_ERROR;
+    size_t towrite = mrb_space_used(buff); 
+    ssize_t result;
+
+    while (towrite) {
+        result = mrb_writeout(buff, fd, towrite);
+        if (result < 0) {
+            if (EV_SHOULDWAIT()) {
+                return PIO_AGAIN;
+            }
+            return PIO_ERROR;
+        }
+
+        if (result == 0) {
+            return PIO_EOF;
+        }
+
+        towrite -= result;
+    }
+    return PIO_MOREDATA;
 }
 
 
