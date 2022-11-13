@@ -12,6 +12,19 @@
 #define EV_SHOULDWAIT() ((errno == EAGAIN) || (errno == EWOULDBLOCK))
 
 
+struct pipeio;
+
+
+enum pipeio_status {
+    PIO_OK = 0,
+    PIO_AGAIN = -1,
+    PIO_ERROR = -2,
+    PIO_BUFFERFULL = -3,
+    PIO_MOREDATA = -4,
+    PIO_EOF = -5,
+};
+
+
 enum pipeio_op {
     PIO_READ = EPOLLIN,
     PIO_WRITE = EPOLLOUT,
@@ -21,6 +34,10 @@ enum pipeio_op {
 
 
 typedef void (*pipeio_callback)(int fd, int events, void *arg);
+
+
+typedef enum pipeio_status (*pipeio_worker) 
+    (struct pipeio *, int fd, struct mrb *buff);
 
 
 /* A simple bag which used by waitA to hold io's essential data 
@@ -51,22 +68,6 @@ pipeio_dearm(int fd);
 
 void
 pipeio_loop(volatile int *status, int holdfd);
-
-
-struct pipeio;
-
-
-enum pipeio_status {
-    PIO_OK = 0,
-    PIO_AGAIN = -1,
-    PIO_ERROR = -2,
-    PIO_BUFFERFULL = -3,
-    PIO_MOREDATA = -4,
-};
-
-
-typedef enum pipeio_status (*pipeio_worker) 
-    (struct pipeio *, int fd, struct mrb *buff);
 
 
 struct pipeio *
@@ -103,6 +104,18 @@ pipeio_writer(struct pipeio *p, int fd, struct mrb *buff);
 
 void
 pipeio_start(struct pipeio *p);
+
+
+struct pipeio_side*
+pipeio_otherside(struct pipeio_side *s);
+
+
+int
+register_for_read(struct pipeio_side *s);
+
+
+int
+register_for_write(struct pipeio_side *s);
 
 
 #endif
