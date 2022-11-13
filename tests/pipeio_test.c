@@ -67,7 +67,6 @@ test_pipeio_create() {
         goto failure;
     }
 
-    pipeio_init(0);
     struct pipeio *pipe = pipeio_create(infd, outfd, BUFFSIZE, NULL);
     if (pipe == NULL) {
         ERROR("pipeio_create");
@@ -103,7 +102,6 @@ destroy:
     free(outside_inbuff);
     free(outside_outbuff);
     close(randfd);
-    pipeio_deinit();
 }
 
 
