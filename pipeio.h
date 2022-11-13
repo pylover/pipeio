@@ -72,7 +72,7 @@ pipeio_loop(volatile int *status, int holdfd);
 
 
 struct pipeio *
-pipeio_create(int lfd, int rfd, size_t mtu, size_t buffsize, void *backref);
+pipeio_create(int lfd, int rfd, size_t buffsize, void *backref);
 
 
 void

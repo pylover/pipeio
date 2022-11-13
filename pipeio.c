@@ -35,7 +35,6 @@ struct pipeio {
     struct mrb *output;
 
     /* Options */
-    size_t mtu;
     void *backref;
 };
 
@@ -143,7 +142,7 @@ _readwrite(int fd, int op, struct pipeio_side *s) {
 
 
 struct pipeio *
-pipeio_create(int infd, int outfd, size_t mtu, size_t buffsize, void *backref) {
+pipeio_create(int infd, int outfd, size_t buffsize, void *backref) {
     struct pipeio *p = malloc(sizeof(struct pipeio));
     if (p == NULL) {
         return NULL;

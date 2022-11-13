@@ -67,7 +67,7 @@ test_pipeio_create() {
         goto failure;
     }
 
-    struct pipeio *pipe = pipeio_create(infd, outfd, 1024, BUFFSIZE, NULL);
+    struct pipeio *pipe = pipeio_create(infd, outfd, BUFFSIZE, NULL);
     if (pipe == NULL) {
         ERROR("pipeio_create");
         goto failure;
