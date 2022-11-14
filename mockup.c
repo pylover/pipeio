@@ -21,7 +21,7 @@ unix_connect(const char *filename) {
     int fd;
     struct sockaddr_un addr;
 
-    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+    if ((fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0) {
         ERROR("socket");
         return -1;
     }

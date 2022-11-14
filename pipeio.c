@@ -44,6 +44,7 @@ _read(struct pipeio_side *s) {
     int fd = s->task.fd;
     struct pipeio *p = s->pipe;
     enum pipeio_status status = s->reader(p, fd, s->readbuff);
+    DEBUG("read: %d", status);
     switch (status) {
         case PIO_BUFFERFULL:
             if (register_for_write(pipeio_otherside(s)) < 0) {
@@ -79,6 +80,7 @@ _write(struct pipeio_side *s) {
     int fd = s->task.fd;
     struct pipeio *p = s->pipe;
     enum pipeio_status status = s->writer(p, fd, s->writebuff);
+    DEBUG("write: %d", status);
     switch (status) {
         case PIO_MOREDATA:
             struct pipeio_side *otherside = pipeio_otherside(s);
@@ -113,7 +115,7 @@ static void
 _readwrite(int fd, int op, struct pipeio_side *s) {
     struct pipeio *p = s->pipe;
     enum pipeio_status status;
-
+    
     if (op & PIO_RDHUP) {
         INFO("Remote hanged up");
         p->errhandler(p);
@@ -138,6 +140,56 @@ _readwrite(int fd, int op, struct pipeio_side *s) {
         p->errhandler(p);
         return;
     }
+}
+
+
+enum pipeio_status
+pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
+    size_t toread = mrb_space_available(buff); 
+    ssize_t result;
+
+    while (toread) {
+        result = mrb_readin(buff, fd, toread);
+        DEBUG("readin: %d, len: %lu", fd, result);
+        if (result < 0) {
+            if (EV_SHOULDWAIT()) {
+                return PIO_AGAIN;
+            }
+            return PIO_ERROR;
+        }
+
+        if (result == 0) {
+            return PIO_EOF;
+        }
+
+        toread -= result;
+    }
+    return PIO_BUFFERFULL;
+}
+
+
+enum pipeio_status
+pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
+    size_t towrite = mrb_space_used(buff); 
+    ssize_t result;
+
+    while (towrite) {
+        result = mrb_writeout(buff, fd, towrite);
+        DEBUG("writeout: %d, len: %lu", fd, result);
+        if (result < 0) {
+            if (EV_SHOULDWAIT()) {
+                return PIO_AGAIN;
+            }
+            return PIO_ERROR;
+        }
+
+        if (result == 0) {
+            return PIO_EOF;
+        }
+
+        towrite -= result;
+    }
+    return PIO_MOREDATA;
 }
 
 
@@ -241,51 +293,9 @@ pipeio_outside_reader_set(struct pipeio *p, pipeio_worker reader) {
 }
 
 
-enum pipeio_status
-pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
-    size_t toread = mrb_space_available(buff); 
-    ssize_t result;
-
-    while (toread) {
-        result = mrb_readin(buff, fd, toread);
-        if (result < 0) {
-            if (EV_SHOULDWAIT()) {
-                return PIO_AGAIN;
-            }
-            return PIO_ERROR;
-        }
-
-        if (result == 0) {
-            return PIO_EOF;
-        }
-
-        toread -= result;
-    }
-    return PIO_BUFFERFULL;
-}
-
-
-enum pipeio_status
-pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
-    size_t towrite = mrb_space_used(buff); 
-    ssize_t result;
-
-    while (towrite) {
-        result = mrb_writeout(buff, fd, towrite);
-        if (result < 0) {
-            if (EV_SHOULDWAIT()) {
-                return PIO_AGAIN;
-            }
-            return PIO_ERROR;
-        }
-
-        if (result == 0) {
-            return PIO_EOF;
-        }
-
-        towrite -= result;
-    }
-    return PIO_MOREDATA;
+void
+pipeio_errhandler_set(struct pipeio *p, pipeio_onerror handler) {
+    p->errhandler = handler;
 }
 
 

@@ -17,6 +17,12 @@
 #define BUFFSIZE   4096
 
 
+static void
+_onerror(struct pipeio *p) {
+    ERROR("->");
+}
+
+
 void
 test_pipeio_create() {
     struct unixsrv *inside;
@@ -73,6 +79,7 @@ test_pipeio_create() {
         ERROR("pipeio_create");
         goto failure;
     }
+    pipeio_errhandler_set(pipe, _onerror);
 
     pipeio_start(pipe);
     pipeio_loop(NULL, 0);

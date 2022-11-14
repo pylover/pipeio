@@ -119,4 +119,8 @@ int
 register_for_write(struct pipeio_side *s);
 
 
+void
+pipeio_errhandler_set(struct pipeio *p, pipeio_onerror handler);
+
+
 #endif
