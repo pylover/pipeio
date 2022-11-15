@@ -8,7 +8,7 @@ project(pipeio
 configure_file(manifest.h.in manifest.h)
 
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE=1")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -D_GNU_SOURCE=1")
 
 
 include_directories(
@@ -41,14 +41,14 @@ list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 
 # Mockup
-add_library(mockup OBJECT mockup.c)
+add_library(mockup OBJECT tests/mockup.c)
 
 # Mockup executable
-add_executable(mockup_run mockup_run.c)
+add_executable(mockup_run tests/mockup_run.c)
 target_link_libraries(mockup_run PUBLIC mockup clog)
 
 
 # Test Magic ringbuffer
-add_executable(pipeio_test pipeio_test.c)
+add_executable(pipeio_test tests/pipeio_test.c)
 target_link_libraries(pipeio_test PUBLIC mockup pipeio mrb clog)
 add_test(NAME pipeio_test COMMAND pipeio_test)

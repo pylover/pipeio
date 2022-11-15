@@ -44,7 +44,7 @@ _read(struct pipeio_side *s) {
     int fd = s->task.fd;
     struct pipeio *p = s->pipe;
     enum pipeio_status status = s->reader(p, fd, s->readbuff);
-    DEBUG("read: %d", status);
+    DEBUG("read: %d %d", fd, status);
     switch (status) {
         case PIO_BUFFERFULL:
             if (register_for_write(pipeio_otherside(s)) < 0) {
@@ -80,7 +80,7 @@ _write(struct pipeio_side *s) {
     int fd = s->task.fd;
     struct pipeio *p = s->pipe;
     enum pipeio_status status = s->writer(p, fd, s->writebuff);
-    DEBUG("write: %d", status);
+    DEBUG("write: %d %d", fd, status);
     switch (status) {
         case PIO_MOREDATA:
             struct pipeio_side *otherside = pipeio_otherside(s);
@@ -150,7 +150,6 @@ pipeio_reader(struct pipeio *p, int fd, struct mrb *buff) {
 
     while (toread) {
         result = mrb_readin(buff, fd, toread);
-        DEBUG("readin: %d, len: %lu", fd, result);
         if (result < 0) {
             if (EV_SHOULDWAIT()) {
                 return PIO_AGAIN;
@@ -175,7 +174,6 @@ pipeio_writer(struct pipeio *p, int fd, struct mrb *buff) {
 
     while (towrite) {
         result = mrb_writeout(buff, fd, towrite);
-        DEBUG("writeout: %d, len: %lu", fd, result);
         if (result < 0) {
             if (EV_SHOULDWAIT()) {
                 return PIO_AGAIN;
@@ -224,12 +222,12 @@ pipeio_create(int infd, int outfd, size_t buffsize, void *backref) {
     p->inside.task.fd = infd;
     p->inside.task.op = PIO_READ;
     p->inside.task.callback = (pipeio_callback)_readwrite;
-    p->inside.task.arg = p;
+    p->inside.task.arg = &(p->inside);
 
     p->outside.task.fd = outfd;
     p->outside.task.op = PIO_READ;
     p->outside.task.callback = (pipeio_callback)_readwrite;
-    p->outside.task.arg = p;
+    p->outside.task.arg = &(p->outside);
 
     /* Callbacks */
     p->inside.writer = pipeio_writer;
